@@ -2,45 +2,168 @@
 <html>
 <head>
     <title>SOS Emergency System</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        body { font-family: Arial; margin: 20px; background: #f0f2f5; }
-        .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 10px; }
-        .status { background: white; padding: 15px; border-radius: 8px; margin: 10px 0; }
-        .error { color: red; background: #fee; padding: 10px; border-radius: 5px; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow: auto; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 15px; margin: 20px 0; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stat-value { font-size: 2rem; font-weight: bold; }
+        .map-container { background: white; padding: 20px; border-radius: 10px; margin: 20px 0; }
+        #map { height: 400px; border-radius: 8px; }
+        .datalogs { background: white; padding: 20px; border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        .red { color: #ef4444; font-weight: bold; }
+        .orange { color: #f97316; font-weight: bold; }
+        .yellow { color: #eab308; font-weight: bold; }
+        .whatsapp-badge { background: #25D366; color: white; padding: 5px 10px; border-radius: 20px; display: inline-block; }
+        .filter-btn { padding: 5px 15px; margin: 0 5px; border: 1px solid #ddd; background: white; border-radius: 20px; cursor: pointer; }
+        .filter-btn.active { background: #667eea; color: white; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🚨 SOS Emergency System</h1>
-        <p>WhatsApp: +639307661916</p>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1><i class="fas fa-ambulance"></i> SOS Emergency System</h1>
+            <div class="whatsapp-badge">
+                <i class="fab fa-whatsapp"></i> +639307661916
+            </div>
+        </div>
     </div>
 
-    <div class="status" id="apiStatus">Testing API connection...</div>
-    <div id="apiData"></div>
+    <div class="container">
+        <!-- Stats -->
+        <div class="stats" id="stats">
+            <div class="stat-card"><div class="stat-value">0</div><div>Total</div></div>
+            <div class="stat-card"><div class="stat-value">0</div><div>Active</div></div>
+            <div class="stat-card"><div class="stat-value red">0</div><div>RED</div></div>
+            <div class="stat-card"><div class="stat-value orange">0</div><div>ORANGE</div></div>
+            <div class="stat-card"><div class="stat-value yellow">0</div><div>YELLOW</div></div>
+        </div>
 
+        <!-- Map -->
+        <div class="map-container">
+            <h2><i class="fas fa-map-marked-alt"></i> Live Emergency Map</h2>
+            <div id="map"></div>
+        </div>
+
+        <!-- Datalogs -->
+        <div class="datalogs">
+            <h2><i class="fas fa-database"></i> Alert Datalogs</h2>
+            <div style="margin: 10px 0;">
+                <button class="filter-btn active" onclick="filterAlerts('all')">All</button>
+                <button class="filter-btn" onclick="filterAlerts('RED')">RED</button>
+                <button class="filter-btn" onclick="filterAlerts('ORANGE')">ORANGE</button>
+                <button class="filter-btn" onclick="filterAlerts('YELLOW')">YELLOW</button>
+            </div>
+            <div id="datalogs">Loading...</div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        async function testAPI() {
+        let map;
+        let allAlerts = [];
+        let currentFilter = 'all';
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([14.5995, 120.9842], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        }
+
+        // Load data
+        async function loadData() {
             try {
-                // Test the API directly
-                const response = await fetch('/api/test');
-                const data = await response.json();
-                
-                document.getElementById('apiStatus').innerHTML = 
-                    '✅ API Connected Successfully';
-                document.getElementById('apiData').innerHTML = 
-                    '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
-                
+                const [alerts, stats] = await Promise.all([
+                    fetch('/api/alerts').then(r => r.json()),
+                    fetch('/api/stats').then(r => r.json())
+                ]);
+
+                allAlerts = alerts;
+                updateStats(stats);
+                updateMap();
+                displayAlerts();
             } catch (error) {
-                document.getElementById('apiStatus').innerHTML = 
-                    '❌ API Error: ' + error.message;
-                document.getElementById('apiData').innerHTML = 
-                    '<div class="error">' + error + '</div>';
+                console.error('Error:', error);
+                document.getElementById('datalogs').innerHTML = 'Error loading data';
             }
         }
 
-        // Run test
-        testAPI();
+        // Update stats
+        function updateStats(stats) {
+            document.querySelectorAll('.stat-card')[0].innerHTML = `<div class="stat-value">${stats.total_alerts || 0}</div><div>Total</div>`;
+            document.querySelectorAll('.stat-card')[1].innerHTML = `<div class="stat-value">${stats.active_alerts || 0}</div><div>Active</div>`;
+            document.querySelectorAll('.stat-card')[2].innerHTML = `<div class="stat-value red">${stats.red_alerts || 0}</div><div>RED</div>`;
+            document.querySelectorAll('.stat-card')[3].innerHTML = `<div class="stat-value orange">${stats.orange_alerts || 0}</div><div>ORANGE</div>`;
+            document.querySelectorAll('.stat-card')[4].innerHTML = `<div class="stat-value yellow">${stats.yellow_alerts || 0}</div><div>YELLOW</div>`;
+        }
+
+        // Update map
+        function updateMap() {
+            if (!map) initMap();
+            
+            // Clear existing markers
+            map.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) map.removeLayer(layer);
+            });
+
+            const activeAlerts = allAlerts.filter(a => a.status === 'active');
+            
+            activeAlerts.forEach(alert => {
+                const color = alert.level === 'RED' ? '#ef4444' : 
+                             alert.level === 'ORANGE' ? '#f97316' : '#eab308';
+                
+                L.circleMarker([14.5995, 120.9842], {
+                    radius: 10,
+                    fillColor: color,
+                    color: '#fff',
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup(`
+                    <b>Code ${alert.level}</b><br>
+                    📍 ${alert.custom_location || '12 S3 - EDISON'}<br>
+                    🕐 ${new Date(alert.created_at).toLocaleString()}<br>
+                    📊 ${alert.status}
+                `);
+            });
+        }
+
+        // Display alerts
+        function displayAlerts() {
+            let filtered = allAlerts;
+            if (currentFilter !== 'all') {
+                filtered = allAlerts.filter(a => a.level === currentFilter);
+            }
+
+            let html = '<table><tr><th>ID</th><th>Level</th><th>Location</th><th>Status</th><th>Time</th></tr>';
+            filtered.forEach(alert => {
+                html += `<tr>
+                    <td>#${alert.id}</td>
+                    <td class="${alert.level.toLowerCase()}">${alert.level}</td>
+                    <td>${alert.custom_location || '12 S3 - EDISON'}</td>
+                    <td>${alert.status}</td>
+                    <td>${new Date(alert.created_at).toLocaleString()}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            document.getElementById('datalogs').innerHTML = html;
+        }
+
+        // Filter alerts
+        function filterAlerts(level) {
+            currentFilter = level;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            displayAlerts();
+        }
+
+        // Load data every 10 seconds
+        loadData();
+        setInterval(loadData, 10000);
     </script>
 </body>
 </html>
