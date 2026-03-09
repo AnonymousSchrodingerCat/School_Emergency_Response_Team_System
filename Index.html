@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SOS Emergency System</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f0f2f5; }
+        .header { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 10px; }
+        .status { background: white; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .error { color: red; background: #fee; padding: 10px; border-radius: 5px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 SOS Emergency System</h1>
+        <p>WhatsApp: +639307661916</p>
+    </div>
+
+    <div class="status" id="apiStatus">Testing API connection...</div>
+    <div id="apiData"></div>
+
+    <script>
+        async function testAPI() {
+            try {
+                // Test the API directly
+                const response = await fetch('/api/test');
+                const data = await response.json();
+                
+                document.getElementById('apiStatus').innerHTML = 
+                    '✅ API Connected Successfully';
+                document.getElementById('apiData').innerHTML = 
+                    '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+            } catch (error) {
+                document.getElementById('apiStatus').innerHTML = 
+                    '❌ API Error: ' + error.message;
+                document.getElementById('apiData').innerHTML = 
+                    '<div class="error">' + error + '</div>';
+            }
+        }
+
+        // Run test
+        testAPI();
+    </script>
+</body>
+</html>
